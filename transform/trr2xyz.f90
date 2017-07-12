@@ -67,8 +67,8 @@ program trr2xyz
 		rewind(fid)
 		do it=1, ntrr
 			read(fid, '(a)') line
-			read(fid, '(44x, e13.7)') t(it)
-			write(label(it), '("Time = ", e13.7, 2x, i6, " / ", i6)') t(it), it, ntrr
+			read(fid, '(44x, e16.7)') t(it)
+			write(label(it), '("Time = ", e16.7, 2x, i6, " / ", i6)') t(it), it, ntrr
 			read(fid, '(a)') line
 			do i=1, 3
 				read(fid, '(18x, e12.5, 2(2x,e12.5))') a(:,i,it)

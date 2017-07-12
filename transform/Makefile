@@ -9,37 +9,83 @@ LIBDIR=$(MAINDIR)/lib
 FF=$(FFLAG) $(OPENMP)
 
 THISFLAG0=-I$(INCDIR) $(FLIB)
-THISFLAG=-I$(INCDIR) $(FLIB) $(LAPACK)
+THISFLAG =-I$(INCDIR) $(FLIB) $(LAPACK)
 
 FLIB=$(LIBDIR)/libflib.$(STATICEXT)
 
-coms = outcar2axsf.exe \
-   outcar2xyz poscar2xsf chgcar2xsf chg2xsf chgdiff2xsf  \
-   g09tomolekel wavecar2xsf elfcar2xsf chg2cub locpot2cub gro_gather \
-   cube2xsf cube2org gjf2cif pwout2axsf rot_cube             \
-   polar_inert xsf2cube wienpsi2xsf pwout2cif poscar2cif glog2xyz    \
-   cif2poscar poscar_move build_adsorb poscar_new charge2xyz         \
-   gjf_new xsf2gjf print_orbitals shg point_group xyz2gjf            \
-   raman_spectra shg_model poscar2gjf poscar2xyz build_cluster       \
-   pdb_divide gro2xyz trr2xyz cube_den2mo spin_function ebridge      \
-   supercell_pdb shg_mol cube_product crystal_vib cif2xyz coord2gjf  \
-   ff2afm get_band crystal2xyz_charge chgsum modos read_ao_info      \
-   nw2gjf
-
 coms =                     \
+  build_adsorb.exe          \
+  build_cluster.exe         \
+  charge2xyz.exe            \
+  chg2cub.exe               \
+  chg2xsf.exe               \
+  chgcar2xsf.exe            \
+  chgdiff2xsf.exe           \
+  chgsum.exe                \
   cif2gjf.exe               \
   cif2poscar.exe            \
+  cif2xyz.exe               \
+  coord2gjf.exe             \
+  crystal_vib.exe           \
+  crystal2xyz_charge.exe    \
+  cube_den2mo.exe           \
+  cube_product.exe          \
+  cube2org.exe              \
+  cube2xsf.exe              \
+  ebridge.exe               \
+  elfcar2xsf.exe            \
+  ff2afm.exe                \
+  g09tomolekel.exe          \
+  get_band.exe              \
+  gjf_new.exe               \
+  gjf2cif.exe               \
   gjf2xyz.exe               \
   gjf2xyz_charge.exe        \
+  glog2xyz.exe              \
   glog2xyz_tdip.exe         \
   gout2xyz.exe              \
+  gro_gather.exe            \
+  gro2xyz.exe               \
+  locpot2cub.exe            \
+  modos.exe                 \
   mol2xyz.exe               \
   monoclinic_cif_to_pwi.exe \
+  nw2gjf.exe                \
   nwout2gjf.exe             \
   orbit2org.exe             \
+  outcar2axsf.exe           \
+  outcar2xyz.exe            \
+  pdb_divide.exe            \
   pdb2xyz.exe               \
+  point_group.exe           \
+  polar_inert.exe           \
+  poscar_move.exe           \
+  poscar_new.exe            \
+  poscar2cif.exe            \
+  poscar2gjf.exe            \
+  poscar2xsf.exe            \
+  poscar2xyz.exe            \
   printrn.exe               \
-  tmoleout2gjf.exe
+  print_orbitals.exe        \
+  pwout2axsf.exe            \
+  pwout2cif.exe             \
+  raman_spectra.exe         \
+  read_ao_info.exe          \
+  rot_cube.exe              \
+  shg.exe                   \
+  shg_model.exe             \
+  shg_mol.exe               \
+  spin_function.exe         \
+  supercell_pdb.exe         \
+  tmoleout2gjf.exe          \
+  trr2xyz.exe               \
+  wavecar2xsf.exe           \
+  wienpsi2xsf.exe           \
+  xsf2cube.exe              \
+  xsf2gjf.exe               \
+  xyz2gjf.exe
+
+
 	
 all.exe: ${coms}
 
@@ -247,14 +293,11 @@ chgdiff2xsf.exe: chgdiff2xsf.$(OBJEXT) $(FLIB)
 chgcar2xsf.exe: chgcar2xsf.$(OBJEXT) $(FLIB)
 	$(FC) $(FF) $< $(THISFLAG) -o $@
 
-outcar2axsf.exe.exe: outcar2axsf.$(OBJEXT) $(FLIB)
+outcar2axsf.exe: outcar2axsf.$(OBJEXT) $(FLIB)
 	$(FC) $(FF) $< $(THISFLAG) -o $@
 
 outcar2xyz.exe: outcar2xyz.$(OBJEXT) $(FLIB)
 	$(FC) $(FF) $< $(THISFLAG) -o $@
-
-# wavecar2xsf.$(OBJEXT).exe: wavecar2xsf.f90
-# 	$(FC) -c $@
 
 %.$(OBJEXT): %.f90
 	$(FC) $(FFLAG) -I$(INCDIR) -c $<
