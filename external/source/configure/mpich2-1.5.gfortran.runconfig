@@ -1,0 +1,19 @@
+#!/bin/sh
+
+prefix=$HOME/compiler/mpich/mpich2-1.5-gfortran
+
+FC=gfortran
+CC=gcc
+CXX=g++
+
+./configure         \
+  --prefix=$prefix  \
+  --enable-f77      \
+  --enable-fc       \
+  --enable-static   \
+  --enable-g=all    \
+  enable_shared=yes \
+  F77=$FC           \
+  FC=$FC            \
+  CC=$CC            \
+  CXX=$CXX

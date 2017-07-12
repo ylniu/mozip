@@ -1,0 +1,720 @@
+#!/bin/sh
+#BEGIN_MOZIP
+#==============================================================================
+MOZIPDIR=`pwd`
+MOZIP_ROOT=$MOZIPDIR
+EXTDIR=external
+EXTERNAL=$MOZIP_ROOT/${EXTDIR}
+FFTWINSTALL=""
+#=======================================================================
+# Default setup
+#
+PROGRAM="${MOZIPDIR}"
+VERSION="1.0"
+MOZIPINC="mozip.inc"
+Double_Precision="8"
+LIB_QUAD_MATH="$HOME/public/compiler/gcc/gcc-4.9.0/lib64/libquadmath.a"
+#-----------------------------------------------------------------------
+OPTS="-O3"
+#-----------------------------------------------------------------------
+FC=gfortran
+DEBUG=1
+CC=gcc
+PARA="YES"
+OS="LINUX"
+MKLDIR="no"
+INCLOC="no"
+INTEL_ROOT="no"
+#=======================================================================
+while [ $# -gt 0 ]; do
+  name=` echo $1 | cut -d "=" -f 1`
+  value=`echo $1 | cut -d "=" -f 2`
+  case "$name" in
+    -CC         )         CC=$value; shift ;;
+    -FC         )         FC=$value; shift ;;
+    -OS         )         OS=$value; shift ;;
+    -PARA       )       PARA=$value; shift ;;
+    -DEBUG      )      DEBUG=$value; shift ;;
+    -INTEL_ROOT ) INTEL_ROOT=$value; shift ;;
+    -MPIDIR     )     MPIDIR=$value; shift ;;
+    -MKLDIR     )     MKLDIR=$value; shift ;;
+    -INCLOC     )     INCLOC=$value; shift ;;
+    *           )        cat <<END ;
+
+END
+    exit;;
+  esac
+done
+#=======================================================================
+if [ ${INTEL_ROOT}x != "nox" ]; then
+	MKLDIR="${INTEL_ROOT}\mkl"
+	INCLOC="${INTEL_ROOT}\compiler\include\intel64"
+fi
+#=======================================================================
+
+#-----------------------------------------------------------------------
+if [ ${OS}x = "LINUXx" -a ${PARA}x = "YESx" -a ! -x $MPIDIR/bin/mpif90 ]; then
+	which mpif90 >& /dev/null
+	if [ $? -eq 0 ]; then
+		mpif90=`which mpif90`
+		MPIDIR=$(dirname $mpif90)
+		MPIDIR=${MPIDIR%/*}
+	else
+		echo "Setup error: PARA=\"YES\", but mpif90 can not be found!"
+		echo "Please define MPIDIR"
+		echo "Exit!"
+		exit 1
+	fi
+fi
+#-----------------------------------------------------------------------
+# MPI   Compiler
+#
+if [ ! -z $MPIDIR ]; then
+	FCP="$MPIDIR/bin/mpif90"
+	CCP="$MPIDIR/bin/mpicc"
+else
+	FCP="mpif90"
+	CCP="mpicc"
+fi
+#-----------------------------------------------------------------------
+if [ "${OS}x" = "WINx" ]; then
+	OBJEXT="obj"
+	AR="xilink -lib"
+	AROUT="/out:"
+	RM="rm -rf"
+	STATICEXT="lib"
+	SHAREDEXT="dll"
+elif [ "${OS}x" = "LINUXx" ]; then
+	OBJEXT="o"
+	AR="ar rc"
+	AROUT=""
+	RM="rm -rf"
+	STATICEXT="a"
+	SHAREDEXT="so"
+fi
+if [ "${FC}x" = "gfortranx" ]; then
+	#DP8="-fdefault-real-8"
+	DP16="-fdefault-real-16"
+	F1="-fbounds-check -Wall -ffpe-summary=none -Wno-tabs -Wno-maybe-uninitialized"
+	REPORT=""
+	DBGFLAG="-g -fbacktrace -fbounds-check"
+	DBGFLAG="-g -fbacktrace -fbounds-check -Wall -Wtabs"
+	DBGFLAG="-g -fbacktrace -fbounds-check -Wall -Wno-tabs"
+	DBGFLAG="-g -fbacktrace -fbounds-check -Wall -ffpe-trap=zero,overflow,underflow -Wno-tabs"
+	DBGFLAG="-g -fbacktrace $F1"
+	# http://feap.berkeley.edu/forum/index.php?topic=1310.0
+	OPENMP="-fopenmp"
+	DFLAG=""
+	MAKELIB="lib"
+	CLEANLIB="clean_lib"
+	LAPACKMKL="no"
+	ISMKL="no"
+	LN="ln -s"
+elif [ "${FC}x" = "ifortx" ]; then
+	if [ "${OS}x" = "WINx" ]; then
+		DP8="-Qautodouble"
+		#DP16="-r16"
+		#REPORT="/Qvec_report0 /warn:none"
+		REPORT="/warn:all"
+		#DBGFLAG="/debug:full /traceback /check:all"
+		DBGFLAG="-debug:full -traceback -check:all"
+		OPENMP="-openmp"
+		ISMKL="yes"
+		#  -L"/opt/intel/composerxe/lib/intel64" -liomp5 -lpthread
+		LN="cp"
+		INCPATH=${INCLOC}
+		DFLAG="/I${INCPATH} -fpp -DIFORT"
+	elif [ "${OS}x" = "LINUXx" ]; then
+		DP8="-r8"
+		DP16="-r16"
+		#REPORT="-vec_report0 -warn none"
+		REPORT="-warn all"
+		DBGFLAG="-g -traceback -check all"
+		OPENMP="-openmp"
+		DFLAG="-DIFORT"
+		ISMKL="yes"
+		#  -L"/opt/intel/composerxe/lib/intel64" -liomp5 -lpthread
+		LN="ln -s"
+	fi
+fi
+DFLAG="${DFLAG} -D${OS}"
+#-----------------------------------------------------------------------
+if [ ${Double_Precision}x = "8x" ]; then
+	RX=${DP8}
+elif [ ${Double_Precision}x = "16x" ]; then
+	RX=${DP16}
+	DEF="-D R16"
+	#----------------------------------------------------------------------------
+	# checking whether we are using gcc 4.6.0 or later,
+	# which need by fftw with enable_quad_precision=yes option
+cat <<EOF > testDP.c
+#ifdef __GNUC__
+#  if (__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ > 6) \
+   || (__GNUC__ == 4 && __GNUC_MINOR__ == 6 && __GNUC_PATCHLEVEL__ >= 0)
+     yes;
+#  endif
+#endif
+EOF
+if [ `gcc -E testDP.c | grep yes` ]; then
+	GCCVERSION="yes"
+	rm -f testDP.c
+else
+	rm -f testDP.c
+	echo "Error!"
+	echo
+	echo "You have set Double_Precision=\"16\""
+	echo "gcc 4.6 or later required for quad precision support"
+	echo
+	echo "You can set Double_Precision=\"8\""
+	echo
+	echo "Or if you want use quad precision, you should install gcc 4.6 or newer version"
+	echo "And you should set variable LIB_QUAD_MATH in this setup file, for example:"
+	echo "LIB_QUAD_MATH=\"\$HOME/public/compiler/gcc/gcc-4.9.0/lib64/libquadmath.a\""
+	echo
+	echo "Exit!"
+	exit 1
+fi
+#-----------------------------------------------------------------------
+else
+	echo
+	echo "Error!"
+	echo "Double_Precision should be set to '', '8', or '16', exit!"
+	exit 1
+fi
+#-----------------------------------------------------------------------
+if [ $DEBUG -eq 0 ]; then
+	FFLAG="${RX} ${OPTS} ${REPORT} $F1"
+	FCFLAG="-c ${RX} ${OPTS} ${REPORT}"
+else
+	FFLAG="${RX} ${DBGFLAG}"
+	FCFLAG="-c ${RX} ${DBGFLAG}"
+fi
+#-----------------------------------------------------------------------
+#MOZIPDIR=`pwd`
+INCDIR="${MOZIPDIR}/include"
+LIBDIR="${MOZIPDIR}/lib"
+BINDIR="${MOZIPDIR}/bin"
+#-----------------------------------------------------------------------
+EXAMPLES="${MOZIPDIR}/examples"
+NODEFILE="${EXAMPLES}/config/nodefile"
+#-----------------------------------------------------------------------
+# Setup library dir
+#
+LIBSRCDIR="${LIBDIR}/src"
+libflib="${LIBSRCDIR}/flib"
+libmpi="${LIBDIR}/src/mpi"
+liblapack="${LIBDIR}/lib/src/lapack"
+#-----------------------------------------------------------------------
+evc="${MOZIPDIR}/evc"
+MPROG="lib transform"
+MAINSH="mozip"
+ic="${MOZIPDIR}/tvcf/ic"
+spectra="${MOZIPDIR}/tvcf/spectra"
+sumstat="${MOZIPDIR}/sumstat"
+dipole="${MOZIPDIR}/tools/turbomole/dipole"
+#-----------------------------------------------------------------------
+# setup lib
+#
+lapack_full=`ls $EXTERNAL/source/lapack*`
+lapack_name=$(basename $lapack_full)
+lapack_main=${lapack_name/.tgz/}
+lapack_main=${lapack_main/.tar.gz/}
+lapack_shared=$lapack_main-shared
+#
+scalapack_full=`ls $EXTERNAL/source/scalapack*`
+scalapack_name=$(basename $scalapack_full)
+scalapack_main=${scalapack_name/.tgz/}
+scalapack_main=${scalapack_main/.tar.gz/}
+scalapack_shared=$scalapack_main-shared
+#
+fftw_full=`ls $EXTERNAL/source/fftw*`
+fftw_name=$(basename $fftw_full)
+fftw_main=${fftw_name/.tgz/}
+fftw_main=${fftw_main/.tar.gz/}
+fftw_shared=$fftw_main-shared
+#
+FFTW_ROOT=$EXTERNAL/fftw/$fftw_shared
+LAPACK_ROOT=$EXTERNAL/lapack/$lapack_shared
+SCALAPACK_ROOT=$EXTERNAL/scalapack/$scalapack_shared
+#
+FFTW_ROOT_REL=external/fftw/$fftw_shared
+LAPACK_ROOT_REL=external/lapack/$lapack_shared
+SCALAPACK_ROOT_REL=external/scalapack/$scalapack_shared
+#
+lapack_source=$LAPACK_ROOT_REL
+#-----------------------------------------------------------------------
+if [ ${OS}x = "WINx" ]; then
+	SOEXT="dll"
+else
+	SOEXT="so"
+fi
+lapack_so=$LAPACK_ROOT_REL/liblapack.${SOEXT}
+blas_so=$LAPACK_ROOT_REL/libblas.${SOEXT}
+scalapack_so=$SCALAPACK_ROOT_REL/libscalapack.${SOEXT}
+fftw_so=$FFTW_ROOT_REL/lib/libfftw3.${SOEXT}
+fftw_so64=$FFTW_ROOT_REL/lib64/libfftw3.${SOEXT}
+#-----------------------------------------------------------------------
+# setup lib
+if [ "${OS}x" = "WINx" ]; then
+	if [ "${ISMKL}x" = "yesx" ]; then
+		LAPACK="mkl_intel_lp64.lib mkl_intel_thread.lib mkl_core.lib"
+	fi
+elif [ "${OS}x" = "LINUXx" ]; then
+	if [ "${ISMKL}x" = "yesx" ]; then
+		LAPACK="-L${MKLDIR} -lmkl_intel_lp64 -Wl,--start-group -lmkl_intel_thread -lmkl_core -Wl,--end-group -liomp5 -lpthread"
+	elif [ "${ISMKL}x" = "nox" ]; then
+		LAPACK="-L$LAPACK_ROOT -llapack -lblas"
+	fi
+fi
+
+LAPACKREL="${lapack_so}"
+BLASREL="${blas_so}"
+SCALAPACK="-L$SCALAPACK_ROOT -lscalapack"
+#-----------------------------------------------------------------------
+FLIB="-lflib"
+FLIBREL="lib/libflib.a"
+MPIDIR_make=`echo $MPIDIR | sed 's:\/:\\\\/:g'`
+LAPACK_ROOT_make=`echo $LAPACK_ROOT | sed 's:\/:\\\\/:g'`
+#-----------------------------------------------------------------------
+LINE="#-----------------------------------------------------------------------"
+#-----------------------------------------------------------------------
+# setup FFTW
+#
+FFTWSRC="${LIBDIR}/src/fftw/fftw-3.3.3"
+FFTWINSTALL="${LIBDIR}/fftw"
+FFTWINSTALL=${FFTW_ROOT}
+FFTWCONFIG="${FFTWSRC}/runconfig"
+FFTWLIB="${FFTWINSTALL}/lib"
+FFTWLIB64="${FFTWINSTALL}/lib64"
+FFTWINC="${FFTWINSTALL}/include"
+if [ ${RX}x = "-r16x" ]; then
+	FFTW="-I${FFTWINC} -L${FFTWLIB} -L${FFTWLIB64} -lfftw3q $LIB_QUAD_MATH"
+else
+	FFTW="-I${FFTWINC} -L${FFTWLIB} -L${FFTWLIB64} -lfftw3"
+fi
+#-----------------------------------------------------------------------
+#
+#===============================================================================
+# Generate mozip.inc
+#
+cat << EOF > ${MOZIPINC}
+${LINE}
+PROGRAM        = ${PROGRAM}
+VERSION        = ${VERSION}
+MOZIPDIR       = ${MOZIPDIR}
+MOZIPINC       = ${MOZIPINC}
+MPROG          = ${MPROG}
+MAINSH         = ${MAINSH}
+${LINE}
+PARA           = ${PARA}
+${LINE}
+MPI_ROOT       = ${MPIDIR}
+${LINE}
+OS             = ${OS}
+DEF            = ${DEF}
+FC             = ${FC}
+FCP            = ${FCP}
+CC             = ${CC}
+CCP            = ${CCP}
+OPENMP         = ${OPENMP}
+OPTS           = ${OPTS}
+DP8            = ${DP8}
+DP16           = ${DP16}
+RX             = ${RX}
+FFLAG          = ${FFLAG}
+FCFLAG         = ${FCFLAG}
+AR             = ${AR}
+AROUT          = ${AROUT}
+RM             = ${RM}
+LN             = ${LN}
+MKLDIR         = ${MKLDIR}
+STATICEXT      = ${STATICEXT}
+SHAREDEXT      = ${SHAREDEXT}
+OBJEXT         = ${OBJEXT}
+DFLAG          = ${DFLAG}
+INCPATH        = ${INCPATH}
+${LINE}
+FFTW_ROOT      = ${FFTW_ROOT}
+LAPACK_ROOT    = ${LAPACK_ROOT}
+SCALAPACK_ROOT = ${SCALAPACK_ROOT}
+${LINE}
+INCDIR         = ${INCDIR}
+LIBDIR         = ${LIBDIR}
+BINDIR         = ${BINDIR}
+${LINE}
+EXAMPLES       = ${EXAMPLES}
+NODEFILE       = ${NODEFILE}
+${LINE}
+FFTW           = ${FFTW}
+FFTWINSTALL    = ${FFTWINSTALL}
+${LINE}
+FLIB           = ${FLIB}
+FLIBREL        = ${FLIBREL}
+LAPACK         = ${LAPACK}
+ISMKL          = ${ISMKL}
+LAPACKREL      = ${LAPACKREL}
+BLASREL        = ${BLASREL}
+SCALAPACK      = ${SCALAPACK}
+${LINE}
+EOF
+#
+#===============================================================================
+# Generate runconfig for FFTW
+#
+if [ ${RX}x = "-r16x" ]; then
+	enable_quad_precision="enable_quad_precision=yes"
+fi
+#===============================================================================
+# Generate MOZIP Makefile
+#
+cat << EOF > Makefile
+include mozip.inc
+
+PWD=\$(shell pwd)
+
+all:   $MAKELIB  exe
+clean: $CLEANLIB clean_exe
+
+coms=\${MPROG}
+
+lib: lapack scalapack fftw
+	@if [ ! -d ${BINDIR} ]; then \\
+		mkdir -p \${BINDIR}; \\
+	fi
+	@if [ ! -d ${INCDIR} ]; then \\
+		mkdir -p \${INCDIR}; \\
+	fi
+	@cd \${LIBDIR}; make; make install
+	@echo
+	@echo "make lib successfully!"
+	@echo
+
+lapack:
+	@if [ ! -f $blas_so ]; then \\
+		rm -rf $EXTERNAL/lapack; \\
+		mkdir -p $EXTERNAL/lapack; \\
+		cp $lapack_full $EXTERNAL/lapack/; \\
+		cd $EXTERNAL/lapack; \\
+		tar zxf $lapack_name; \\
+		rm -rf $lapack_shared; \\
+		mv $lapack_main $lapack_shared; \\
+		rm -rf $lapack_name; \\
+		cd $lapack_shared; \\
+		cp ../../source/configure/$lapack_shared.$FC.$OS.make.inc ./make.inc; \\
+		cp ../../source/configure/$lapack_shared.$FC.$OS.SRC.Makefile SRC/Makefile; \\
+		cp ../../source/configure/$lapack_shared.$FC.$OS.BLAS.SRC.Makefile BLAS/SRC/Makefile; \\
+		cp ../../source/configure/$lapack_shared.$FC.$OS.TESTING.MATGEN.Makefile TESTING/MATGEN/Makefile; \\
+		cd BLAS/SRC; \\
+		make; \\
+		cd ../../; \\
+		export LD_LIBRARY_PATH=$LAPACK_ROOT:$LD_LIBRARY_PATH; \\
+		make; \\
+		echo; \\
+		echo "make   lapack successfully!"; \\
+		echo; \\
+	else \\
+		echo "lapack    has been installed!"; \\
+	fi
+
+scalapack:
+	@if [ ! -f ${scalapack_so} ]; then \\
+		rm -rf $EXTERNAL/scalapack; \\
+		mkdir -p $EXTERNAL/scalapack; \\
+		cp $scalapack_full $EXTERNAL/scalapack; \\
+		cd $EXTERNAL/scalapack; \\
+		tar zxf $scalapack_name; \\
+		rm -rf $scalapack_shared; \\
+		mv $scalapack_main $scalapack_shared; \\
+		rm -rf $scalapack_name; \\
+		cd $scalapack_shared; \\
+		cp ../../source/configure/$scalapack_shared.$FC.SLmake.inc ./SLmake.inc; \\
+		cp ../../source/configure/$scalapack_shared.$FC.Makefile   ./Makefile;   \\
+		cp ../../source/configure/$scalapack_shared.$FC.SRC.Makefile SRC/Makefile; \\
+		sed "s/^\(MPI_ROOT\).*/MPI_ROOT      = $MPIDIR_make/i" SLmake.inc > SLmake1.inc; \\
+		mv SLmake1.inc SLmake.inc; \\
+		sed "s/^\(LAPACK_ROOT\).*/LAPACK_ROOT   = $LAPACK_ROOT_make/i" SLmake.inc > SLmake1.inc; \\
+		mv SLmake1.inc SLmake.inc; \\
+		make; \\
+		echo; \\
+		echo "make scalapack successfully!"; \\
+		echo; \\
+	else \\
+		echo "scalapack has been installed!"; \\
+	fi
+
+fftw:
+	@if [ ! -f ${fftw_so} -a ! -f ${fftw_so64} ]; then \\
+		rm -rf $EXTERNAL/fftw; \\
+		mkdir -p $EXTERNAL/fftw/source; \\
+		cp $fftw_full $EXTERNAL/fftw/source; \\
+		cd $EXTERNAL/fftw/source; \\
+		tar zxf $fftw_name; \\
+		cd $fftw_main; \\
+		cp ../../../source/configure/fftw.$FC.runconfig ./runconfig; \\
+		sed "s/^\(FC\).*/FC=$FC/i" runconfig > runconfig1; \\
+		mv runconfig1 runconfig; \\
+		chmod +x runconfig; \\
+		./runconfig; \\
+		make; \\
+		make install; \\
+		echo; \\
+		echo "make fftw successfully!"; \\
+		echo; \\
+	else \\
+		echo "fftw      has been installed!"; \\
+	fi
+
+exe:
+	@if [ ! -d ${BINDIR} ]; then \\
+		mkdir -p \${BINDIR}; \\
+	fi
+	@if [ ! -d ${INCDIR} ]; then \\
+		mkdir -p \${INCDIR}; \\
+	fi
+	@for proj in \${coms}; do \\
+		cd \${PWD}/\$\$proj; \\
+		make; \\
+	done
+	@echo
+	@echo "make exe successfully!"
+	@echo
+
+install:
+	@for proj in \${coms}; do cd \${PWD}/\$\$proj; make install; done
+	@echo
+	@echo "make install successfully!"
+	@echo
+
+clean_lib:
+	cd \${LIBDIR}       ; make clean
+	@echo
+	@echo "make clean successfully!"
+	@echo
+
+clean_exe:
+	cd \${coms}       ; make clean
+	@echo
+	@echo "make clean successfully!"
+	@echo
+
+clean_mainsh:
+	@for proj in \${scripts}; do rm -f \${PWD}/bin/\$\$proj; done
+	@echo
+	@echo "make clean successfully!"
+	@echo
+
+cleanall:
+	@cd \${LIBDIR}       ; make cleanall
+	@for proj in \${coms}; do cd \${PWD}/\$\$proj; make cleanall; done
+	\${RM} \${MOZIPINC}
+	\${RM} \${BINDIR}
+	\${RM} \${INCDIR}
+	\${RM} Makefile
+	@echo
+	@echo "make cleanall successfully!"
+	@echo
+EOF
+#===============================================================================
+#END_MOZIP
+#BEGIN_GTOOL
+#===============================================================================
+GTOOLDIR=${MOZIPDIR}/grouptools
+GTBIN=${GTOOLDIR}/bin
+#GPROG="chemshell gaussian ivr molcas molpro public quantum_espresso wien2k turbomole sos icmrci zindo"
+GPROG="chemshell gaussian ivr molcas molpro public quantum_espresso wien2k turbomole"
+cat << EOF >> ${MOZIPINC}
+GTOOLDIR    = ${GTOOLDIR}
+GTBIN       = ${GTBIN}
+GPROG       = ${GPROG}
+EOF
+#=======================================================================
+# Generate generate-static
+#
+cat << EOF > generate-static
+#!/bin/sh
+
+#-------------------------------------------------------------------
+# Generate Release directory
+#
+RELEASEDIR=release-static
+rm -rf \$RELEASEDIR
+mkdir \$RELEASEDIR
+#-------------------------------------------------------------------
+# Copy README ... to Release directory
+#
+cp INSTALL README Release-notes \$RELEASEDIR
+
+lib="                     \\
+ lib/src/flib/*.a          \\
+ evc/evc_dev/*.a \\
+ sumstat/*.a              \\
+ tvcf/ic/*.a               \\
+ tvcf/spectra/*.a"
+
+include="include/*"
+
+mkdir -p \$RELEASEDIR/lib
+mkdir -p \$RELEASEDIR/include
+cp \$lib     \$RELEASEDIR/lib
+cp \$include \$RELEASEDIR/include
+#-------------------------------------------------------------------
+cp main/mozip \$RELEASEDIR/lib
+#-------------------------------------------------------------------
+# Generate Install script
+#
+
+cat << %EOF% > \$RELEASEDIR/Makefile
+#!/bin/sh
+#-------------------------------------------------------------------
+# User define
+#
+FC=$FC
+FCP=$FCP
+FFLAG=$FFLAG
+LAPACK_ROOT=$LIBDIR
+FFWT_ROOT=$LIBDIR/fftw
+#-------------------------------------------------------------------
+LAPACK=-L\\\${LAPACK_ROOT} -llapack -lblas
+FFTW=-I\\\${FFWT_ROOT}/include -L\\\${FFWT_ROOT}/lib -lfftw3
+LIB=./lib
+INC=./include
+#-------------------------------------------------------------------
+exe=evc sumstat reduce_num \
+ TVCORF_IC TVCORF_IC_para TVSPEC_IC \
+ TVCORF_SPEC TVCORF_SPEC_para TVSPEC_SPEC mozip
+#-------------------------------------------------------------------
+all: \\\${exe}
+
+mozip:
+	@mkdir -p bin
+	cp lib/mozip bin/mozip
+
+evc:
+	@mkdir -p bin
+	\\\${FC} -o evc            \\\${FFLAG} -I\\\${INC} -L\\\${LIB} -levc         -lflib \\\${LAPACK}
+	@mv \\\$@ bin
+
+sumstat:
+	@mkdir -p bin
+	\\\${FCP} -o sumstat         \\\${FFLAG} -I\\\${INC} -L\\\${LIB} -lsumstat       -lflib \\\${LAPACK}
+	@mv \\\$@ bin
+
+reduce_num:
+	@mkdir -p bin
+	\\\${FC} -o reduce_num        \\\${FFLAG} -I\\\${INC} -L\\\${LIB} -lreduce_num     -lflib \\\${LAPACK}
+	@mv \\\$@ bin
+
+TVCORF_IC:
+	@mkdir -p bin
+	\\\${FC} -o TVCORF_IC         \\\${FFLAG} -I\\\${INC} -L\\\${LIB} -lTVCORF_IC      -lflib \\\${LAPACK}
+	@mv \\\$@ bin
+
+TVCORF_IC_para:
+	@mkdir -p bin
+	\\\${FCP} -o TVCORF_IC_para   \\\${FFLAG} -I\\\${INC} -L\\\${LIB} -lTVCORF_IC_para -lflib \\\${LAPACK}
+	@mv \\\$@ bin
+
+TVSPEC_IC:
+	@mkdir -p bin
+	\\\${FC} -o TVSPEC_IC         \\\${FFLAG} -I\\\${INC} -L\\\${LIB} -lTVSPEC_IC      -lflib \\\${LAPACK} \\\${FFTW}
+	@mv \\\$@ bin
+
+TVCORF_SPEC:
+	@mkdir -p bin
+	\\\${FC} -o TVCORF_SPEC       \\\${FFLAG} -I\\\${INC} -L\\\${LIB} -lTVCORF_SPEC      -lflib \\\${LAPACK}
+	@mv \\\$@ bin
+
+TVCORF_SPEC_para:
+	@mkdir -p bin
+	\\\${FCP} -o TVCORF_SPEC_para \\\${FFLAG} -I\\\${INC} -L\\\${LIB} -lTVCORF_SPEC_para -lflib \\\${LAPACK}
+	@mv \\\$@ bin
+
+TVSPEC_SPEC:
+	@mkdir -p bin
+	\\\${FC} -o TVSPEC_SPEC       \\\${FFLAG} -I\\\${INC} -L\\\${LIB} -lTVSPEC_SPEC      -lflib \\\${LAPACK} \\\${FFTW}
+	@mv \\\$@ bin
+%EOF%
+EOF
+
+chmod +x generate-static
+#=======================================================================
+# Delete for temporary
+#
+rm generate-static
+#=======================================================================
+# Generate generate-shared
+#
+cat << EOF > generate-shared
+#!/bin/sh
+
+#-------------------------------------------------------------------
+# Generate Release directory
+#
+RELEASEDIR=release-shared
+rm -rf \$RELEASEDIR
+mkdir \$RELEASEDIR
+#-------------------------------------------------------------------
+# Copy README ... to Release directory
+#
+cp INSTALL README Release-notes \$RELEASEDIR
+
+exe="                        \\
+ bin/mozip                   \\
+ bin/evc.exe                 \\
+ bin/sumstat.exe             \\
+ bin/reduce_num.exe          \\
+ bin/TVCORF_IC.exe           \\
+ bin/TVCORF_IC_para.exe      \\
+ bin/TVSPEC_IC.exe           \\
+ bin/TVCORF_ISC.exe          \\
+ bin/TVCORF_ISC_para.exe     \\
+ bin/TVSPEC_ISC.exe          \\
+ bin/TVCORF_SPEC.exe         \\
+ bin/TVCORF_SPEC_para.exe    \\
+ bin/TVSPEC_SPEC.exe         \\
+ bin/numfreq.sh              \\
+ bin/numfreq_coord.exe       \\
+ bin/numfreq_gather.exe      \\
+ bin/numfreq_single.sh       \\
+ bin/del_small_integral.exe  \\
+ bin/get_NM.exe              \\
+ bin/mb-average.exe          \\
+ bin/mb-average-temp.exe     \\
+ bin/mb-direction.exe        \\
+ bin/mb-direction-all.exe    \\
+ bin/mb-direction-temp.exe   \\
+ bin/me-calc.exe             \\
+ bin/me-prepare.exe          \\
+ bin/me-prepare-temp.exe     \\
+ bin/pr-neighbor.exe         \\
+ bin/pr-prepare.exe          \\
+ bin/pr-transferintegral.exe \\
+ bin/rw-fluc0.exe            \\
+ bin/rw-fluc0-temp.exe       \\
+ bin/pr-hoprate.exe          \\
+ bin/pr-hoprate-temp.exe     \\
+ bin/separate_molecule.exe   \\
+ bin/ss-periodic.exe         \\
+ bin/transport_clear.sh      \\
+ bin/.environment"
+
+lib="external/lib/libquadmath.so.0 \
+     external/lib/libgfortran.so.3"
+
+includes="include/*"
+
+mkdir -p \$RELEASEDIR/bin
+mkdir -p \$RELEASEDIR/lib
+cp \$exe \$RELEASEDIR/bin
+cp \$lib \$RELEASEDIR/lib
+#-------------------------------------------------------------------
+env="bin/.environment"
+cp \$env  \$RELEASEDIR/environment.example
+tar zcf MOZIP-v$VERSION-release.tar.gz \$RELEASEDIR
+scp MOZIP-v$VERSION-release.tar.gz ylniu@cserver:/crunch/home/ylniu/program/MOZIP-packages
+ssh ylniu@cserver "scp /crunch/home/ylniu/program/MOZIP-packages/MOZIP-v$VERSION-release.tar.gz ylniu@159.226.64.170:/home/ylniu/MOZIP-packages"
+ssh ylniu@cserver "rm -rf /crunch/home/ylniu/program/MOZIP-packages/MOZIP-v$VERSION-release.tar.gz"
+#-------------------------------------------------------------------
+EOF
+chmod +x generate-shared
+#===============================================================================

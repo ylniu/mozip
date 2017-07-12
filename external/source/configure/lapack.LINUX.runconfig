@@ -1,0 +1,115 @@
+compiled LAPACK into shared library
+Postby peng.du ? Sat Feb 28, 2009 4:01 am
+
+Per a user's request for a way of compiled LAPACK in shared library, I did a little homework for it. Post it here so it might be useful to some others.
+
+http://pduwork.pbwiki.com/lapack-as-a-shared-library
+
+This following applies to lapack3.1.1.
+
+(1) Adding -fPIC to
+
+OPTS & NOOPT in make.inc
+
+(2) Change the names in make.inc
+
+BLASLIB = ../../blas$(PLAT).so
+LAPACKLIB = ../lapack$(PLAT).so
+TMGLIB = tmglib$(PLAT).so
+
+(3) In ./SRC, change the Makefile from
+
+../$(LAPACKLIB): $(ALLOBJ)
+$(ARCH) $(ARCHFLAGS) $@ $(ALLOBJ)
+$(RANLIB) $@
+
+to
+
+../$(LAPACKLIB): $(ALLOBJ)
+$(LOADER) $(LOADOPTS) -shared -Wl,-soname,liblapack.so -o $@ $(ALLOBJ)
+
+(4) In ./BLAS/SRC, change the Makefile from
+
+$(BLASLIB): $(ALLOBJ)
+$(ARCH) $(ARCHFLAGS) $@ $(ALLOBJ)
+$(RANLIB) $@
+
+to
+
+$(BLASLIB): $(ALLOBJ)
+$(LOADER) $(LOADOPTS) -z muldefs -shared -Wl,-soname,libblas.so -o $@ $(ALLOBJ)
+
+And "-z muldefs" is used to handle multiple definitions in $(ALLOBJ)...whew~! [see [2]]
+
+(5) In ./TESTING/MATGEN, change the Makefile from
+
+../../$(TMGLIB): $(SMATGEN) $(CMATGEN) $(SCATGEN) $(DMATGEN) \
+$(ZMATGEN) $(DZATGEN)
+$(ARCH) $(ARCHFLAGS) $@ $(ALLOBJ)
+$(RANLIB) $@
+
+to
+
+../../$(TMGLIB): $(ALLOBJ)
+$(LOADER) $(LOADOPTS) -shared -Wl,-soname,libtmglib.so -o $@ $(ALLOBJ)
+
+
+(5.2)
+delete redundant object file in SRC/Makefile
+ztplqt.o ztplqt2.o ztpmlqt.o
+#-------------------------------------------------------------------------
+(6) create a bunch of soft links: (no use)
+
+ln -sf tmglib_LINUX.so libtmglib.so
+ln -sf lapack_LINUX.so liblapack.so
+ln -sf blas_LINUX.so libblas.so
+
+Add these to ./Makefile
+lib: blaslib lapacklib tmglib
+ln -sf tmglib_LINUX.so libtmglib.so
+ln -sf lapack_LINUX.so liblapack.so
+ln -sf blas_LINUX.so libblas.so
+
+which used to be just
+
+lib: blaslib lapacklib tmglib
+
+Note that for sure you could do it without having to do these softlinks, for example when create the refblas, instead of doing
+
+$(LOADER) $(LOADOPTS) -z muldefs -shared -Wl,-soname,libblas.so -o $@ $(ALLOBJ)
+
+you could do
+
+$(LOADER) $(LOADOPTS) -z muldefs -shared -Wl,-soname,blas_LINUX.so -o $@ $(ALLOBJ)
+
+But the softlink give a good view of how shared library is only loaded when executing a program that requires them, eg:
+
+with the softlink liblapack.so, you'll get this:
+
+du:/home/du/lib/tmp/lapack-3.1.1/TESTING@grig-compile ~> ./xlintstc
+
+./xlintstc: error while loading shared libraries: liblapack.so: cannot open shared object file: No such file or directory
+
+And without setting LD_LIBRARY_PATH, you might get:
+
+du:/home/du/lib/tmp/lapack-3.1.1/TESTING@grig-compile ~> ./xlintstc
+
+./xlintstc: error while loading shared libraries: libtmglib.so: cannot open shared object file: No such file or directory
+
+(7) TO USE
+
+i. Compile and create libblas.so, liblapack.so and libtmglib.so by typing make in the lapack directory
+ii. Add the path of the three .so files to LD_LIBRARY_PATH, eg:
+export LD_LIBRARY_PATH=/home/du/lib/lapack-3.1.1.shared_lib:LD_LIBRARY_PATH
+iii. link with your own program using -llapack -lblas and maybe -ltmglib
+
+That's it. And please let me know if something isn't right. I have a modified version of lapack3.1.1 that's been tested and works well. Ask if you need it. I don't have time for pushing it to 3.2, but it shouldn't be too much of a difference.
+
+
+Reference:
+[1] http://www.yolinux.com/TUTORIALS/Librar ... namic.html
+[2] http://sources.redhat.com/binutils/docs ... tions.html
+peng.du
+ 
+Posts: 11
+Joined: Tue Feb 17, 2009 4:14 pm

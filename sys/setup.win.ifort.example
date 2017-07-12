@@ -1,0 +1,15 @@
+#!/bin/sh
+FC="ifort"
+DEBUG=1
+PARA="YES"
+OS="WIN"
+if [ ${FC} = "gfortran" ]; then
+	CC=gcc
+	MPIDIR=$HOME/program/mpich/mpich2-1.5-gfortran-5.4.0
+fi
+if [ ${FC} = "ifort" ]; then
+	CC=icc
+	#MPIDIR=$HOME/program/mpich/mpich2-1.5-ifort-2013
+	INTEL_ROOT="E:\programs\IntelSWTools\parallel_studio_xe_2017\compilers_and_libraries_2017\windows"
+fi
+sh build -CC=${CC} -FC=${FC} -DEBUG=${DEBUG} -MPIDIR=${MPIDIR} -PARA=${PARA} -OS=${OS} -INTEL_ROOT=${INTEL_ROOT}

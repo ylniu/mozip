@@ -1,0 +1,19 @@
+#!/bin/sh
+
+DIRNAME=$(dirname  `pwd`)
+BASENAME=$(basename `pwd`)
+FFTW_ROOT=$(dirname $DIRNAME)/$BASENAME-shared
+
+FC=gfortran
+prefix=$FFTW_ROOT
+
+#enable_quad_precision=yes
+#FFLAGS=" -g -fbacktrace -fbounds-check -Wall -Wno-tabs"
+
+./configure --prefix=$prefix     \
+            --enable-threads     \
+            --enable-openmp      \
+              enable_static=no   \
+              enable_shared=yes  \
+              enable_fortran=yes \
+              F77=$FC
