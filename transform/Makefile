@@ -11,8 +11,6 @@ FF=$(FFLAG) $(OPENMP)
 THISFLAG0=-I$(INCDIR) $(FLIB)
 THISFLAG =-I$(INCDIR) $(FLIB) $(LAPACK)
 
-FLIB=$(LIBDIR)/libflib.$(STATICEXT)
-
 coms =                     \
   build_adsorb.exe          \
   build_cluster.exe         \
@@ -303,12 +301,12 @@ outcar2xyz.exe: outcar2xyz.$(OBJEXT) $(FLIB)
 	$(FC) $(FFLAG) -I$(INCDIR) -c $<
 
 install:
-	for exe in ${coms};  do $(RM) ${BINDIR}/$$exe; ln -s ${PWD}/$$exe ${BINDIR}/$$exe; done
+	for exe in $(coms); do $(RM) $(BINDIR)/$$exe; ln -s $(PWD)/$$exe $(BINDIR)/$$exe; done
 
 clean:
 	$(RM) *.$(OBJEXT) *.mod
-	for exe in ${coms}; do rm -f $$exe; done
+	for exe in $(coms); do $(RM) $$exe; done
 
 cleanall:
 	rm -f *.$(OBJEXT) *.mod
-	for exe in ${coms};  do rm -f ${GTBIN}/$$exe $$exe; done
+	for exe in $(coms); do $(RM) $(BINDIR)/$$exe $$exe; done
