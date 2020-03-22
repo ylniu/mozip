@@ -1,3 +1,7 @@
+echo [global]>%HOMEPATH%\pip\pip.ini
+echo timeout = 6000>>%HOMEPATH%\pip\pip.ini
+echo index-url = https://pypi.tuna.tsinghua.edu.cn/simple>>%HOMEPATH%\pip\pip.ini
+echo trusted-host = pypi.tuna.tsinghua.edu.cn>>%HOMEPATH%\pip\pip.ini
 python -m pip install --upgrade pip
 pip install altgraph
 pip install astroid
