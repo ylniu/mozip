@@ -68,7 +68,7 @@ def _run_convert(pdfile, savedfilename, page_index, index, res=240):
 	# Save Images
 	#
 	img.save(filename=img_path)
-	print(img_path)
+	print("extract "+img_path)
 	img.destroy()
 
 def dealPerPdf(workdir, path, file, index):
@@ -161,24 +161,20 @@ def expdf(inputfile, extractImage, trimWhiteBoarder):
 			os.chdir(path)
 			datanames = os.listdir(os.getcwd())
 			for dataname in datanames:
-				if os.path.splitext(dataname)[1] == '.jpg' and os.path.splitext(dataname)[0][0:3] != "tmp":
-					#---------------------------------------------------------------------------------------------------
-					tmpjpg1 = "tmp1_" + os.path.splitext(dataname)[0] + ".jpg"
-					# tmpjpg2 = "tmp2_" + os.path.splitext(dataname)[0] + ".jpg"
-					tmpjpg2 = dataname
+				if os.path.splitext(dataname)[1] == '.jpg':
 					#---------------------------------------------------------------------------------------------------
 					# ResizeImage(fileinp=dataname, fileout=tmpjpg1, width=1920, height=-1, type="png")
 					#---------------------------------------------------------------------------------------------------
-					cmd="convert "+dataname+" -resize "+str(width0)+" "+tmpjpg1
-					print("converting file "+dataname)
+					cmd="convert "+dataname+" -resize "+str(width0)+" "+dataname
+					print(cmd)
 					os.system(cmd)
 					#---------------------------------------------------------------------------------------------------
-					img    = PImage.open(tmpjpg1)
+					img    = PImage.open(dataname)
 					width  = img.size[0]
 					height = img.size[1]
 					delta  = int(round((height - height0) / 2, 0))
 					#---------------------------------------------------------------------------------------------------
-					cmd="convert "+tmpjpg1+" -shave 0x"+str(delta)+" +repage "+tmpjpg2
+					cmd="convert "+dataname+" -shave 0x"+str(delta)+" "+dataname
 					print(cmd)
 					os.system(cmd)
 					#---------------------------------------------------------------------------------------------------
@@ -187,7 +183,8 @@ def expdf(inputfile, extractImage, trimWhiteBoarder):
 					# height = img.size[1]
 					# print(width, height)
 					#---------------------------------------------------------------------------------------------------
-					os.remove(tmpjpg1)
-					#---------------------------------------------------------------------------------------------------
 			os.chdir(workdir)
+	if os.path.exists(newfile):
+		os.remove(newfile)
+	# shutil.copyfile(inputfile, newfile)
 	#-------------------------------------------------------------------------------------------------------------------
