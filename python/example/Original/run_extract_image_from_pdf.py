@@ -5,6 +5,8 @@ import getopt
 if __name__ == '__main__':
 	inputfile = ''
 	outputfile = ''
+	extractImage=1
+	trimWhiteBoarder=1
 	try:
 		opts, args = getopt.getopt(sys.argv[1:],"hi:o:",["ifile=","ofile="])
 	except getopt.GetoptError:
@@ -18,6 +20,4 @@ if __name__ == '__main__':
 			inputfile = arg
 		elif opt in ("-o", "--ofile"):
 			outputfile = arg
-	extractImage=1
-	trimWhiteBoarder=1
 	extract_image_from_pdf.expdf(inputfile, extractImage, trimWhiteBoarder)
