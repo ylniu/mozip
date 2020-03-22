@@ -1,3 +1,4 @@
+mkdir C:%HOMEPATH%\pip
 echo [global]>C:%HOMEPATH%\pip\pip.ini
 echo timeout = 6000>>C:%HOMEPATH%\pip\pip.ini
 echo index-url = https://pypi.tuna.tsinghua.edu.cn/simple>>C:%HOMEPATH%\pip\pip.ini

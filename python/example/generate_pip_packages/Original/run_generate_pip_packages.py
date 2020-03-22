@@ -6,7 +6,8 @@ import getpass
 if __name__ == '__main__':
 	packages=gpp.get_package()
 	user_name = getpass.getuser()  # 获取当前用户名
-	PIPINI="C:%HOMEPATH%\\pip\pip.ini"
+	PIPDIR="C:%HOMEPATH%\\pip"
+	PIPINI=PIPDIR+"\\pip.ini"
 	#-------------------------------------------------------------------------------------------------------------------
 	f = open('install_python_packages.bat', 'w')
 	#-------------------------------------------------------------------------------------------------------------------
@@ -14,6 +15,7 @@ if __name__ == '__main__':
 	#-------------------------------------------------------------------------------------------------------------------
 	address="https://"+url+"/simple"
 	#-------------------------------------------------------------------------------------------------------------------
+	f.write("mkdir " + PIPDIR + "\n")
 	f.write("echo [global]>" + PIPINI + "\n")
 	f.write("echo timeout = 6000>>" + PIPINI + "\n")
 	f.write("echo index-url = " + address + ">>" + PIPINI + "\n")
