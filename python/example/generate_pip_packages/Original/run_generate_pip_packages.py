@@ -6,7 +6,7 @@ import getpass
 if __name__ == '__main__':
 	packages=gpp.get_package()
 	user_name = getpass.getuser()  # 获取当前用户名
-	PIPINI="C:\\%HOMEPATH%\\pip\pip.ini"
+	PIPINI="C:%HOMEPATH%\\pip\pip.ini"
 	#-------------------------------------------------------------------------------------------------------------------
 	f = open('install_python_packages.bat', 'w')
 	#-------------------------------------------------------------------------------------------------------------------
