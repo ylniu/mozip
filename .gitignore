@@ -19,6 +19,8 @@
 *.pdb
 *.local
 
+__pycache__
+
 /Makefile
 
 external/fftw
