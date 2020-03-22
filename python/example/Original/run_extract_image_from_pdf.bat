@@ -1,0 +1,1 @@
+python run_extract_image_from_pdf.py -i 001.图说.声律启蒙[上].一东.1.pdf
