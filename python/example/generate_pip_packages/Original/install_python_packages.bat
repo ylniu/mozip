@@ -1,3 +1,4 @@
+python -m pip install --upgrade pip
 pip install altgraph
 pip install astroid
 pip install backcall
