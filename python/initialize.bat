@@ -27,3 +27,6 @@
 :: timeout = 6000
 :: index-url = https://pypi.tuna.tsinghua.edu.cn/simple
 :: trusted-host = pypi.tuna.tsinghua.edu.cn
+
+:: Add Environment variable
+:: PYTHONPATH=D:\Share\Data\GitHub\mozip\python
