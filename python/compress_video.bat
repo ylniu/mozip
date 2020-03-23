@@ -1,0 +1,1 @@
+ffmpeg -i ÂìÒÏ_original.mp4 -s 1920x1080 -c:v libx264 -c:a aac -b:v 500k -r 25 ÂìÒÏ.mp4
