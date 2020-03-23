@@ -34,6 +34,7 @@
 ::“%1中%1”是“CD”命令的第一个（%1）参数（这里是路径）
 
 echo off
+echo 请关闭360 等防火墙，杀毒软件
 reg add "HKCR\*\shell\ms-dos" /ve /d "Open DOS Command" /f
 reg add "HKCR\*\shell\ms-dos\command" /ve /d "cmd.exe /k cd %1" /f
 reg add "HKCR\Folder\shell\ms-dos" /ve /d "Open DOS Command" /f
